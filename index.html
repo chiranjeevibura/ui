@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Migration Report Portal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="container mt-5">
+  <h1 class="text-center">Migration Report Portal</h1>
+  <form id="reportForm" class="mb-4">
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label for="domain" class="form-label">Domain</label>
+        <select id="domain" class="form-select">
+          <option value="ABC">ABC</option>
+          <option value="XYZ">XYZ</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="division" class="form-label">Division</label>
+        <select id="division" class="form-select">
+          <option value="Sales">Sales</option>
+          <option value="Finance">Finance</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="subdivision" class="form-label">SubDivision</label>
+        <select id="subdivision" class="form-select">
+          <option value="">--None--</option>
+          <option value="Retail">Retail</option>
+          <option value="Corporate">Corporate</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="groupBy" class="form-label">Group By</label>
+        <select id="groupBy" class="form-select">
+          <option value="adminDocument.originationSystemName">Origination System</option>
+          <option value="securityGroup">Security Group</option>
+        </select>
+      </div>
+    </div>
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label for="startDate" class="form-label">Start Date</label>
+        <input type="datetime-local" id="startDate" class="form-control" value="{{ default_start_date }}">
+      </div>
+      <div class="col-md-4">
+        <label for="endDate" class="form-label">End Date</label>
+        <input type="datetime-local" id="endDate" class="form-control" value="{{ default_end_date }}">
+      </div>
+      <div class="col-md-2">
+        <label for="timeInterval" class="form-label">Time Interval (hrs)</label>
+        <select id="timeInterval" class="form-select">
+          <option value="2">2 Hours</option>
+          <option value="6">6 Hours</option>
+          <option value="1">1 Hour</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="timeGrouping" class="form-label">Time Grouping</label>
+        <select id="timeGrouping" class="form-select">
+          <option value="hour">Hourly</option>
+          <option value="day">Daily</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Generate Report</button>
+  </form>
+
+  <!-- Report Table -->
+  <div id="reportResult" class="mb-5">
+    <h3>Report Results</h3>
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Group</th>
+          <th>Time Bucket</th>
+          <th>Count</th>
+        </tr>
+      </thead>
+      <tbody id="reportTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Visualization -->
+  <div>
+    <h3>Visual Report</h3>
+    <canvas id="reportChart"></canvas>
+  </div>
+</div>
+
+<script>
+  $('#reportForm').on('submit', function(e){
+    e.preventDefault();
+    // Build the filters object from form inputs
+    const filters = {
+      domain: $('#domain').val(),
+      division: $('#division').val(),
+      subdivision: $('#subdivision').val(),
+      startDate: $('#startDate').val(),
+      endDate: $('#endDate').val(),
+      groupBy: $('#groupBy').val(),
+      timeInterval: $('#timeInterval').val(),
+      timeGrouping: $('#timeGrouping').val()
+    };
+
+    $.ajax({
+      url: '/api/report',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(filters),
+      success: function(result){
+        // Populate table
+        $('#reportTableBody').empty();
+        let labels = [], dataset = [];
+        result.forEach(groupData => {
+          // For each group, add a row per time bucket
+          groupData.buckets.forEach(bucket => {
+            $('#reportTableBody').append(`
+              <tr>
+                <td>${groupData._id}</td>
+                <td>${new Date(bucket.timeBucket).toLocaleString()}</td>
+                <td>${bucket.count}</td>
+              </tr>
+            `);
+            // For visualization, you might aggregate the data differently.
+            labels.push(new Date(bucket.timeBucket).toLocaleString());
+            dataset.push(bucket.count);
+          });
+        });
+
+        // Render a sample bar chart with Chart.js
+        const ctx = document.getElementById('reportChart').getContext('2d');
+        if(window.reportChart) {
+          window.reportChart.destroy();
+        }
+        window.reportChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Document Count',
+              data: dataset,
+              backgroundColor: 'rgba(75, 192, 192, 0.5)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { title: { display: true, text: 'Time Bucket' }},
+              y: { title: { display: true, text: 'Count' }, beginAtZero: true }
+            }
+          }
+        });
+      },
+      error: function(){
+        alert('Error generating report');
+      }
+    });
+  });
+</script>
+</body>
+</html>
